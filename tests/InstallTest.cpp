@@ -60,7 +60,7 @@ int main(int argc, char **argv) {
 
   Facade myfacade;
 
-  util::PerformanceMonitor monitor("tests");
+  util::PerformanceMonitor monitor("tests",3);
 
   // create dataflow configuraiton
   DefaultInstanceGraphPtr pattern_graph_ptr = std::make_shared<DefaultInstanceGraph>("test1");
@@ -84,8 +84,7 @@ int main(int argc, char **argv) {
   {
     nlohmann::json jsongraph;
     ns::to_json(jsongraph, *pattern_graph_ptr);
-    //std::string graphString = nlohmann::json::to_ jsongraph;
-
+    
     std::ofstream myfile;
     myfile.open(filename);
     myfile << jsongraph.dump(4);
@@ -123,6 +122,8 @@ int main(int argc, char **argv) {
   spdlog::info(monitor.toString());
 
   spdlog::info("exit program");
+
+  spdlog::info("run the same dataflow again using: traactConsole {0}", filename);
 
   return 0;
 }
