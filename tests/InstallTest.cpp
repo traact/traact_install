@@ -62,6 +62,32 @@ int main(int argc, char **argv) {
 
   util::PerformanceMonitor monitor("tests",3);
 
+  {
+    DefaultInstanceGraphPtr pattern_graph_ptr = std::make_shared<DefaultInstanceGraph>("kinect_playback");
+
+    // create instances of patterns
+    DefaultPatternInstancePtr
+        source_pattern = pattern_graph_ptr->addPattern("source", myfacade.instantiatePattern("KinectAzurePlayer"));
+    DefaultPatternInstancePtr
+        sink_pattern = pattern_graph_ptr->addPattern("sink", myfacade.instantiatePattern("OpenCvWindow"));
+
+    // connect
+    pattern_graph_ptr->connect("source", "output", "sink", "input");
+
+    std::string filename = pattern_graph_ptr->name + ".json";
+    {
+      nlohmann::json jsongraph;
+      ns::to_json(jsongraph, *pattern_graph_ptr);
+
+      std::ofstream myfile;
+      myfile.open(filename);
+      myfile << jsongraph.dump(4);
+      myfile.close();
+
+      std::cout << jsongraph.dump(4) << std::endl;
+    }
+  }
+
   // create dataflow configuraiton
   DefaultInstanceGraphPtr pattern_graph_ptr = std::make_shared<DefaultInstanceGraph>("test1");
 
