@@ -34,18 +34,18 @@ class Traact(ConanFile):
         self.requires("traact_core/%s@camposs/stable" % self.version)
         self.requires("traact_facade/%s@camposs/stable" % self.version)
         self.requires("traact_spatial/%s@camposs/stable" % self.version)
-        self.requires("traact_vision/%s@camposs/stable" % self.version)
-        self.requires("traact_kinect_azure/%s@camposs/stable" % self.version)
-        self.requires("traact_point_cloud/%s@camposs/stable" % self.version)
+        #self.requires("traact_vision/%s@camposs/stable" % self.version)
+        #self.requires("traact_kinect_azure/%s@camposs/stable" % self.version)
+        #self.requires("traact_point_cloud/%s@camposs/stable" % self.version)
 
 
     def configure(self):
         self.options['traact_core'].shared = self.options.shared
         self.options['traact_facade'].shared = self.options.shared
         self.options['traact_spatial'].shared = self.options.shared
-        self.options['traact_vision'].shared = self.options.shared
+        #self.options['traact_vision'].shared = self.options.shared
         self.options['opencv'].with_qt = True
-        self.options['traact_kinect_azure'].with_bodytracking = True
+        #self.options['traact_kinect_azure'].with_bodytracking = True
 
 
 

@@ -41,6 +41,11 @@
 #include <spdlog/sinks/stdout_color_sinks.h>
 
 #include <traact/serialization/JsonGraphInstance.h>
+#include <traact/component/facade/ApplicationSyncSink.h>
+
+void callback_func(traact::TimestampType ts, const Eigen::Affine3d & pose) {
+    spdlog::info("callback_func");
+}
 
 int main(int argc, char **argv) {
 
@@ -62,6 +67,7 @@ int main(int argc, char **argv) {
 
   util::PerformanceMonitor monitor("tests",3);
 
+  /*
   {
     DefaultInstanceGraphPtr pattern_graph_ptr = std::make_shared<DefaultInstanceGraph>("kinect_playback");
 
@@ -86,7 +92,7 @@ int main(int argc, char **argv) {
 
       std::cout << jsongraph.dump(4) << std::endl;
     }
-  }
+  }*/
 
   // create dataflow configuraiton
   DefaultInstanceGraphPtr pattern_graph_ptr = std::make_shared<DefaultInstanceGraph>("test1");
@@ -101,10 +107,16 @@ int main(int argc, char **argv) {
   DefaultPatternInstancePtr
       mul_pattern = pattern_graph_ptr->addPattern("mul1", myfacade.instantiatePattern("MultiplicationComponent"));
 
+    DefaultPatternInstancePtr
+            sink_pattern_2 =
+            pattern_graph_ptr->addPattern("sink2", myfacade.instantiatePattern("ApplicationSyncSink_Eigen::Affine3d"));
+
   // connect
   pattern_graph_ptr->connect("source", "output", "mul1", "input0");
   pattern_graph_ptr->connect("source2", "output", "mul1", "input1");
   pattern_graph_ptr->connect("mul1", "output", "sink", "input");
+    pattern_graph_ptr->connect("mul1", "output", "sink2", "input");
+
 
   std::string filename = pattern_graph_ptr->name + ".json";
   {
@@ -123,6 +135,11 @@ int main(int argc, char **argv) {
 
   DefaultComponentPtr source = myfacade.getComponent("source");
   DefaultComponentPtr source2 = myfacade.getComponent("source2");
+
+    DefaultComponentPtr sink = myfacade.getComponent("sink2");
+    auto sink_ = std::dynamic_pointer_cast<traact::component::facade::ApplicationSyncSink<spatial::Pose6DHeader> >(sink);
+    sink_->SetCallback(callback_func);
+
 
   {
     MEASURE_TIME(monitor, 0, "network start")
