@@ -34,9 +34,14 @@ class Traact(ConanFile):
         self.requires("traact_core/%s@camposs/stable" % self.version)
         self.requires("traact_facade/%s@camposs/stable" % self.version)
         self.requires("traact_spatial/%s@camposs/stable" % self.version)
-        #self.requires("traact_vision/%s@camposs/stable" % self.version)
-        #self.requires("traact_kinect_azure/%s@camposs/stable" % self.version)
+        self.requires("traact_vision/%s@camposs/stable" % self.version)
+        self.requires("traact_kinect_azure/%s@camposs/stable" % self.version)
         #self.requires("traact_point_cloud/%s@camposs/stable" % self.version)
+        self.requires("traact_component_vicon/%s@camposs/stable" % self.version)
+        self.requires("traact_component_nvpipe/%s@camposs/stable" % self.version)
+        self.requires("traact_component_rtsp/%s@camposs/stable" % self.version)
+        self.requires("traact_serialization/%s@camposs/stable" % self.version)
+
 
 
     def configure(self):
