@@ -31,7 +31,7 @@
 #include <iostream>
 
 #include <traact/traact.h>
-#include <traact/facade/Facade.h>
+#include <traact/facade/DefaultFacade.h>
 #include <traact/util/PerformanceMonitor.h>
 #include <traact/component/spatial/util/Pose6DTestSource.h>
 //#include <traact/component/spa
@@ -48,7 +48,7 @@
 #include <signal.h>
 
 bool running = true;
-traact::facade::Facade myfacade;
+traact::facade::DefaultFacade myfacade;
 void ctrlC(int i) {
     spdlog::info("User requested exit (Ctrl-C).");
     myfacade.stop();
@@ -58,6 +58,107 @@ void callback_func(traact::TimestampType ts, const Eigen::Affine3d & pose) {
     spdlog::info("callback_func");
 }
 
+std::string getIdxName(std::string name, int idx){
+    return fmt::format("{0}_{1}", name, idx);
+}
+
+void addTracking(const traact::DefaultInstanceGraphPtr& pattern_graph_ptr, int idx, int ir2gray, const std::string& mkv_file, const std::string& result_file){
+    using namespace traact::facade;
+    using namespace traact;
+    using namespace traact::dataflow;
+
+    DefaultPatternInstancePtr
+            source_pattern = pattern_graph_ptr->addPattern(getIdxName("source",idx),myfacade.instantiatePattern("KinectAzureSingleFilePlayer"));
+    DefaultPatternInstancePtr
+            undistort_pattern = pattern_graph_ptr->addPattern(getIdxName("undistorted",idx),myfacade.instantiatePattern("OpenCVUndistortImage"));
+    DefaultPatternInstancePtr
+            convert_pattern_6000 = pattern_graph_ptr->addPattern(getIdxName("convert_6000",idx), myfacade.instantiatePattern("OpenCvConvertImage"));
+    DefaultPatternInstancePtr
+            circle_tracking = pattern_graph_ptr->addPattern(getIdxName("circle_tracking",idx), myfacade.instantiatePattern("CircleTracking"));
+    DefaultPatternInstancePtr
+            estimate_pose = pattern_graph_ptr->addPattern(getIdxName("estimate_pose",idx), myfacade.instantiatePattern("EstimatePose"));
+    DefaultPatternInstancePtr
+            write_2dlist = pattern_graph_ptr->addPattern(getIdxName("write_2dList",idx), myfacade.instantiatePattern("FileRecorder_cereal_spatial:Position2DList"));
+
+    pattern_graph_ptr->connect(getIdxName("source",idx), "output_ir", getIdxName("undistorted",idx), "input");
+    pattern_graph_ptr->connect(getIdxName("source",idx), "output_calibration_ir", getIdxName("undistorted",idx), "input_calibration");
+    pattern_graph_ptr->connect(getIdxName("undistorted",idx), "output", getIdxName("convert_6000",idx), "input");
+
+
+    pattern_graph_ptr->connect(getIdxName("convert_6000",idx), "output", getIdxName("circle_tracking",idx), "input");
+
+    pattern_graph_ptr->connect(getIdxName("circle_tracking",idx), "output", getIdxName("estimate_pose",idx), "input");
+    pattern_graph_ptr->connect("source_target", "output", getIdxName("estimate_pose",idx), "input_model");
+    pattern_graph_ptr->connect(getIdxName("undistorted",idx), "output_calibration", getIdxName("estimate_pose",idx), "input_calibration");
+
+    pattern_graph_ptr->connect(getIdxName("estimate_pose",idx), "output_points", getIdxName("write_2dList",idx), "input");
+
+    source_pattern->pattern_pointer.parameter["file"]["value"] = mkv_file;
+    convert_pattern_6000->pattern_pointer.parameter["irToGray"]["value"] = ir2gray;
+    estimate_pose->pattern_pointer.parameter["forceZFaceCamera"]["value"] = false;
+
+    write_2dlist->pattern_pointer.parameter["file"]["value"] = result_file;
+
+}
+int mainBundle(int argc, char **argv) {
+    using namespace traact::facade;
+    using namespace traact;
+    using namespace traact::dataflow;
+
+    signal(SIGINT, &ctrlC);
+
+    util::init_logging(spdlog::level::trace,false, "");
+
+    DefaultInstanceGraphPtr pattern_graph_ptr = std::make_shared<DefaultInstanceGraph>("tracking");
+    DefaultPatternInstancePtr
+            source_target_pattern = pattern_graph_ptr->addPattern("source_target",myfacade.instantiatePattern("FileReader_cereal_spatial:Position3DList"));
+    source_target_pattern->pattern_pointer.parameter["file"]["value"] = "/media/frieder/System/data/inm_ba/LTarget.json";
+
+    std::vector<std::string> folders;
+    ///media/frieder/System/data/inm_ba/recording_20210408_ARTCalib_Origin/cn01/k4a_capture.mkv
+    folders.push_back("/media/frieder/System/data/inm_ba/recording_20210408_ARTCalib_Origin/cn01/");
+    folders.push_back("/media/frieder/System/data/inm_ba/recording_20210408_ARTCalib_Origin/cn02/");
+    folders.push_back("/media/frieder/System/data/inm_ba/recording_20210408_ARTCalib_Origin/cn03/");
+    folders.push_back("/media/frieder/System/data/inm_ba/recording_20210408_ARTCalib_Origin/cn04/");
+    folders.push_back("/media/frieder/System/data/inm_ba/recording_20210408_ARTCalib_Origin/cn05/");
+    folders.push_back("/media/frieder/System/data/inm_ba/recording_20210408_ARTCalib_Origin/cn06/");
+
+
+    for(int i=0;i<folders.size();++i){
+        std::string folder = folders[i];
+        addTracking(pattern_graph_ptr, i, 2000, fmt::format("{0}{1}", folder, "k4a_capture.mkv"), fmt::format("{0}{1}", folder, "LTarget_points.txt"));
+    }
+
+
+    buffer::TimeDomainManagerConfig td_config;
+    td_config.time_domain = 0;
+    td_config.ringbuffer_size = 10;
+    td_config.master_source = "source_0";
+    td_config.source_mode = SourceMode::WaitForBuffer;
+    td_config.missing_source_event_mode = MissingSourceEventMode::WaitForEvent;
+    td_config.max_offset = std::chrono::milliseconds(10);
+    td_config.max_delay = std::chrono::milliseconds(100);
+    td_config.measurement_delta = std::chrono::nanoseconds(33333333);
+
+    pattern_graph_ptr->timedomain_configs[0] = td_config;
+
+
+
+
+
+    myfacade.loadDataflow(pattern_graph_ptr);
+
+
+    myfacade.start();
+    while(running){
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    }
+    myfacade.stop();
+    spdlog::info("exit program");
+
+
+    return 0;
+}
 int main(int argc, char **argv) {
 
     boost::timer::cpu_timer cput;
@@ -87,9 +188,11 @@ int main(int argc, char **argv) {
 
     DefaultInstanceGraphPtr pattern_graph_ptr = std::make_shared<DefaultInstanceGraph>("tracking");
     DefaultPatternInstancePtr
-            source_pattern = pattern_graph_ptr->addPattern("source",myfacade.instantiatePattern("KinectAzureSingleFilePlayer"));
-    DefaultPatternInstancePtr
             source_target_pattern = pattern_graph_ptr->addPattern("source_target",myfacade.instantiatePattern("FileReader_cereal_spatial:Position3DList"));
+
+    DefaultPatternInstancePtr
+            source_pattern = pattern_graph_ptr->addPattern("source",myfacade.instantiatePattern("KinectAzureSingleFilePlayer"));
+
     DefaultPatternInstancePtr
             undistort_pattern = pattern_graph_ptr->addPattern("undistorted",myfacade.instantiatePattern("OpenCVUndistortImage"));
     DefaultPatternInstancePtr
@@ -115,6 +218,10 @@ int main(int argc, char **argv) {
             print_pose = pattern_graph_ptr->addPattern("print_pose", myfacade.instantiatePattern("Pose6DPrint"));
     DefaultPatternInstancePtr
             write_pose = pattern_graph_ptr->addPattern("write_pose", myfacade.instantiatePattern("FileWriter_cereal_spatial:Pose6D"));
+    DefaultPatternInstancePtr
+            write_calib = pattern_graph_ptr->addPattern("write_calib", myfacade.instantiatePattern("FileWriter_cereal_vision:CameraCalibration"));
+
+
 
     DefaultPatternInstancePtr
             rotate_to_unity1 = pattern_graph_ptr->addPattern("rotate_to_unity1", myfacade.instantiatePattern("StaticPose"));
@@ -174,22 +281,26 @@ int main(int argc, char **argv) {
 
     pattern_graph_ptr->connect("mul_opencv_to_opengl", "output", "write_pose", "input");
 
+    pattern_graph_ptr->connect("undistorted", "output_calibration", "write_calib", "input");
+
+
 
     //pattern_graph_ptr->connect("estimate_pose", "output_points", "write_2dList", "input");
     //pattern_graph_ptr->connect("circle_tracking", "output", "print_tracking", "input");
 
 
 
-    //source_pattern->pattern_pointer.parameter["file"]["value"] = "/media/frieder/System/data/inm_ba/recording_20210305_Calib_CN06/cn01/k4a_capture.mkv";
-    source_pattern->pattern_pointer.parameter["file"]["value"] = "/home/frieder/data/ir05_withTarget/cn03/k4a_capture.mkv";
+    source_pattern->pattern_pointer.parameter["file"]["value"] = "/media/frieder/System/data/inm_ba/recording_20210408_ARTCalib_Origin/cn01/k4a_capture.mkv";
+    //source_pattern->pattern_pointer.parameter["file"]["value"] = "/home/frieder/data/ir05_withTarget/cn03/k4a_capture.mkv";
     //source_target_pattern->pattern_pointer.parameter["file"]["value"] = "/media/frieder/System/data/inm_ba/BoardTarget.json";
     source_target_pattern->pattern_pointer.parameter["file"]["value"] = "/media/frieder/System/data/inm_ba/LTarget.json";
-    convert_pattern_6000->pattern_pointer.parameter["irToGray"]["value"] = 6000;
+    convert_pattern_6000->pattern_pointer.parameter["irToGray"]["value"] = 2000;
     convert_pattern_2000->pattern_pointer.parameter["irToGray"]["value"] = 1000;
     estimate_pose->pattern_pointer.parameter["forceZFaceCamera"]["value"] = true;
     //print_tracking_pattern->pattern_pointer.parameter["window"]["value"] = "sink_raw";
 
-    write_pose->pattern_pointer.parameter["file"]["value"] = "/media/frieder/System/data/inm_ba/recording_20210305_Calib_CN06/cn01/pose.json";
+    write_pose->pattern_pointer.parameter["file"]["value"] = "/media/frieder/System/data/inm_ba/recording_20210408_ARTCalib_Origin/cn01/pose.json";
+    write_calib->pattern_pointer.parameter["file"]["value"] = "/media/frieder/System/data/inm_ba/recording_20210408_ARTCalib_Origin/cn01/calib.json";
     //write_2dlist->pattern_pointer.parameter["file"]["value"] = "/media/frieder/System/data/inm_ba/recording_20210305_Calib_CN06/cn01/2dlist.json";
     //play_2dlist->pattern_pointer.parameter["file"]["value"] = "/media/frieder/System/data/inm_ba/recording_20210305_Calib_CN06/cn01/2dlist.json";
 
@@ -279,7 +390,7 @@ int mainX6Playback(int argc, char **argv) {
 
     util::init_logging(spdlog::level::trace,false, "");
 
-    Facade myfacade;
+    DefaultFacade myfacade;
 
     util::PerformanceMonitor monitor("tests",3);
 

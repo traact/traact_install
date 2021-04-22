@@ -32,15 +32,16 @@ class Traact(ConanFile):
     def requirements(self):        
         self.requires("traact_run_env/%s@camposs/stable" % self.version)
         self.requires("traact_core/%s@camposs/stable" % self.version)
-        self.requires("traact_facade/%s@camposs/stable" % self.version)
         self.requires("traact_spatial/%s@camposs/stable" % self.version)
         self.requires("traact_vision/%s@camposs/stable" % self.version)
-        self.requires("traact_kinect_azure/%s@camposs/stable" % self.version)
-        #self.requires("traact_point_cloud/%s@camposs/stable" % self.version)
-        self.requires("traact_component_vicon/%s@camposs/stable" % self.version)
-        self.requires("traact_component_nvpipe/%s@camposs/stable" % self.version)
-        self.requires("traact_component_rtsp/%s@camposs/stable" % self.version)
+        self.requires("traact_component_basic/%s@camposs/stable" % self.version)
+        self.requires("traact_component_kinect_azure/%s@camposs/stable" % self.version)
         self.requires("traact_serialization/%s@camposs/stable" % self.version)
+        #self.requires("traact_point_cloud/%s@camposs/stable" % self.version)
+        #self.requires("traact_component_vicon/%s@camposs/stable" % self.version)
+        #self.requires("traact_component_nvpipe/%s@camposs/stable" % self.version)
+        #self.requires("traact_component_rtsp/%s@camposs/stable" % self.version)
+
 
 
 
@@ -49,7 +50,6 @@ class Traact(ConanFile):
         self.options['traact_facade'].shared = self.options.shared
         self.options['traact_spatial'].shared = self.options.shared
         #self.options['traact_vision'].shared = self.options.shared
-        self.options['opencv'].with_qt = True
         #self.options['traact_kinect_azure'].with_bodytracking = True
 
 
